@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def generar_position(df, margen_tolerancia=0.005):
+def generar_position(df, margen_tolerancia=0.003):
     """
     Evalúa las reglas de la estrategia y genera una columna 'Senal':
     1 = LONG, -1 = SHORT, 0 = NADA.

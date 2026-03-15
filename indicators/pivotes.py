@@ -1,6 +1,6 @@
 import pandas as pd
 
-def calcular_pivotes(df, ventana=5):
+def calcular_pivotes(df, ventana=15):
     """
     Identifica pivotes locales (Soportes y Resistencias).
     ventana: Número de velas a izquierda y derecha para confirmar el pivote.
