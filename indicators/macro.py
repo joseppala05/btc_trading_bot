@@ -38,4 +38,7 @@ def analizar_macro_1d(df_1d, ventana=5):
     
     df_1d['S_Roto'] = rompe_s_ayer & confirma_s_hoy
 
+    df_1d['EMA_200_Macro'] = df_1d['Cierre'].ewm(span=200, adjust=False).mean()
+
+
     return df_1d
