@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def analizar_setup_1h(df_1h, df_1d, margen_zona=0.03):
+def analizar_setup_1h(df_1h, df_1d, margen_zona=0.05):
     # 1. SINCRONIZAR RELOJES
     df_1h['Fecha_Dia'] = df_1h['Fecha'].dt.floor('d')
     muros_diarios = df_1d[['Fecha', 'Resistencia_Macro', 'Soporte_Macro', 'EMA_200_Macro']].copy()

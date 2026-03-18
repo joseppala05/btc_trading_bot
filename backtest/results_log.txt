@@ -1,0 +1,5 @@
+# Log de Resultados de Estrategias de Trading
+# Fecha | Estrategia | Total Ops | Win Rate (%) | Beneficio Neto (R)
+
+2026-03-18 | FVG | 41 | 34.15 | -10.87
+2026-03-18 | CHoCH | 99 | 51.76 | 27.52
