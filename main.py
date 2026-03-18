@@ -1,7 +1,7 @@
-"""Runner principal que permite ejecutar diferentes estrategias desde el mismo repositorio.
+"""Main runner that allows executing different strategies from the same repository.
 
-Uso:
-  python main.py                # Ejecuta la estrategia por defecto
+Usage:
+  python main.py                # Runs the default strategy
   python main.py --strategy choc
 """
 
@@ -11,18 +11,18 @@ import pkgutil
 import strategies
 
 
-def listar_estrategias():
+def list_strategies():
     return sorted([name for _, name, _ in pkgutil.iter_modules(strategies.__path__)])
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Backtest de estrategias de trading")
-    parser.add_argument("--strategy", default="choc", help="Nombre de la estrategia a ejecutar")
+    parser = argparse.ArgumentParser(description="Trading strategies backtest")
+    parser.add_argument("--strategy", default="choc", help="Name of the strategy to execute")
     args = parser.parse_args()
 
-    estrategias_disponibles = listar_estrategias()
-    if args.strategy not in estrategias_disponibles:
-        raise SystemExit(f"Estrategia desconocida: {args.strategy}. Opciones: {', '.join(estrategias_disponibles)}")
+    available_strategies = list_strategies()
+    if args.strategy not in available_strategies:
+        raise SystemExit(f"Unknown strategy: {args.strategy}. Options: {', '.join(available_strategies)}")
 
     module_path = f"strategies.{args.strategy}.main"
     strategy_module = importlib.import_module(module_path)
@@ -30,7 +30,7 @@ def main():
     if hasattr(strategy_module, "run"):
         strategy_module.run()
     else:
-        raise SystemExit(f"La estrategia '{args.strategy}' no define una función run()")
+        raise SystemExit(f"The strategy '{args.strategy}' does not define a run() function")
 
 
 if __name__ == "__main__":
