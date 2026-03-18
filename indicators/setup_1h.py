@@ -32,9 +32,9 @@ def analyze_setup_1h(df_1h, df_1d, zone_margin=0.05):
     rs = gain / loss
     df_1h['RSI'] = 100 - (100 / (1 + rs))
     
-    # Exigimos que antes de caer, el precio estuviera caliente (RSI > 55)
+    # We require that before falling, the price was hot (RSI > 55)
     df_1h['RSI_Short'] = df_1h['RSI'].shift(1) > 55 
-    # Exigimos que antes de rebotar, el precio estuviera agotado (RSI < 45)
+    # We require that before rebounding, the price was exhausted (RSI < 45)
     df_1h['RSI_Long'] = df_1h['RSI'].shift(1) < 45 
 
     # 6. GATILLO CHoCH (Con Filtro de Tendencia Macro)
