@@ -1,297 +1,297 @@
 import pandas as pd
 
-# Añadimos el parámetro de comisión (0.1% por defecto)
-def simular_mtf(df_1h, df_15m, ratio_riesgo_beneficio=3.0, margen_sl=0.003, comision_porcentaje=0.0002):
-    resultados = []
-    fecha_libre = pd.Timestamp('1970-01-01')
+# Add commission parameter (0.1% by default)
+def simulate_mtf(df_1h, df_15m, risk_reward_ratio=3.0, sl_margin=0.003, commission_percentage=0.0002):
+    results = []
+    free_date = pd.Timestamp('1970-01-01')
 
     df_15m['MA_15m'] = df_15m['Cierre'].rolling(window=10).mean() 
 
     setups = df_1h[(df_1h['CHoCH_Bajista'] == True) | (df_1h['CHoCH_Alcista'] == True)]
 
     for index, setup in setups.iterrows():
-        if setup['Fecha'] <= fecha_libre:
+        if setup['Fecha'] <= free_date:
             continue
 
-        tipo = "SHORT" if setup['CHoCH_Bajista'] else "LONG"
-        fecha_setup = setup['Fecha']
+        trade_type = "SHORT" if setup['CHoCH_Bajista'] else "LONG"
+        setup_date = setup['Fecha']
         fibo_33 = setup['Fibo_33']
         fibo_66 = setup['Fibo_66']
         
-        sl_original = setup['Local_High'] * (1 + margen_sl) if tipo == "SHORT" else setup['Local_Low'] * (1 - margen_sl)
+        sl_original = setup['Local_High'] * (1 + sl_margin) if trade_type == "SHORT" else setup['Local_Low'] * (1 - sl_margin)
 
-        velas_15m_futuro = df_15m[df_15m['Fecha'] > fecha_setup]
-        estado = "ESPERANDO_FIBO"
-        precio_entrada = sl = tp = riesgo = 0
-        estado_proteccion = "NADA"
+        velas_15m_futuro = df_15m[df_15m['Fecha'] > setup_date]
+        state = "WAITING_FOR_FIBO"
+        entry_price = sl = tp = risk = 0
+        protection_state = "NOTHING"
 
         for i_15m, vela_15m in velas_15m_futuro.iterrows():
             
-            # FASE A
-            if estado == "ESPERANDO_FIBO":
-                if tipo == "SHORT" and vela_15m['Maximo'] >= fibo_33: estado = "GATILLO_ARMADO"
-                elif tipo == "LONG" and vela_15m['Minimo'] <= fibo_66: estado = "GATILLO_ARMADO"
+            # PHASE A
+            if state == "WAITING_FOR_FIBO":
+                if trade_type == "SHORT" and vela_15m['Maximo'] >= fibo_33: state = "TRIGGER_ARMED"
+                elif trade_type == "LONG" and vela_15m['Minimo'] <= fibo_66: state = "TRIGGER_ARMED"
                     
-                if (vela_15m['Fecha'] - fecha_setup).total_seconds() > 86400: break
+                if (vela_15m['Fecha'] - setup_date).total_seconds() > 86400: break
 
-            # FASE B
-            elif estado == "GATILLO_ARMADO":
-                if tipo == "SHORT" and vela_15m['Cierre'] < vela_15m['MA_15m']:
-                    precio_entrada = vela_15m['Cierre']
+            # PHASE B
+            elif state == "TRIGGER_ARMED":
+                if trade_type == "SHORT" and vela_15m['Cierre'] < vela_15m['MA_15m']:
+                    entry_price = vela_15m['Cierre']
                     sl = sl_original
-                    riesgo = sl - precio_entrada
-                    if riesgo <= 0: break
-                    tp = precio_entrada - (riesgo * ratio_riesgo_beneficio)
-                    estado = "EN_OPERACION"
+                    risk = sl - entry_price
+                    if risk <= 0: break
+                    tp = entry_price - (risk * risk_reward_ratio)
+                    state = "IN_OPERATION"
                     
-                elif tipo == "LONG" and vela_15m['Cierre'] > vela_15m['MA_15m']:
-                    precio_entrada = vela_15m['Cierre']
+                elif trade_type == "LONG" and vela_15m['Cierre'] > vela_15m['MA_15m']:
+                    entry_price = vela_15m['Cierre']
                     sl = sl_original
-                    riesgo = precio_entrada - sl
-                    if riesgo <= 0: break
-                    tp = precio_entrada + (riesgo * ratio_riesgo_beneficio)
-                    estado = "EN_OPERACION"
+                    risk = entry_price - sl
+                    if risk <= 0: break
+                    tp = entry_price + (risk * risk_reward_ratio)
+                    state = "IN_OPERATION"
 
-            # FASE C: Gestión y Cálculo de Comisiones
-            elif estado == "EN_OPERACION":
+            # PHASE C: Management and Commission Calculation
+            elif state == "IN_OPERATION":
                 
-                # Trailing Stop Escalonado
-                if tipo == "SHORT":
-                    distancia_a_favor = precio_entrada - vela_15m['Minimo']
-                    if distancia_a_favor >= (riesgo * 1.5) and estado_proteccion != "PROTEGIDO":
-                        sl = precio_entrada - (riesgo * 0.5)
-                        estado_proteccion = "PROTEGIDO"
-                    elif distancia_a_favor >= riesgo and estado_proteccion == "NADA":
-                        sl = precio_entrada
-                        estado_proteccion = "BREAKEVEN"
-                elif tipo == "LONG":
-                    distancia_a_favor = vela_15m['Maximo'] - precio_entrada
-                    if distancia_a_favor >= (riesgo * 1.5) and estado_proteccion != "PROTEGIDO":
-                        sl = precio_entrada + (riesgo * 0.5)
-                        estado_proteccion = "PROTEGIDO"
-                    elif distancia_a_favor >= riesgo and estado_proteccion == "NADA":
-                        sl = precio_entrada
-                        estado_proteccion = "BREAKEVEN"
+                # Trailing Stop Staggered
+                if trade_type == "SHORT":
+                    distance_in_favor = entry_price - vela_15m['Minimo']
+                    if distance_in_favor >= (risk * 1.5) and protection_state != "PROTECTED":
+                        sl = entry_price - (risk * 0.5)
+                        protection_state = "PROTECTED"
+                    elif distance_in_favor >= risk and protection_state == "NOTHING":
+                        sl = entry_price
+                        protection_state = "BREAKEVEN"
+                elif trade_type == "LONG":
+                    distance_in_favor = vela_15m['Maximo'] - entry_price
+                    if distance_in_favor >= (risk * 1.5) and protection_state != "PROTECTED":
+                        sl = entry_price + (risk * 0.5)
+                        protection_state = "PROTECTED"
+                    elif distance_in_favor >= risk and protection_state == "NOTHING":
+                        sl = entry_price
+                        protection_state = "BREAKEVEN"
 
-                # Comprobación de salidas y cálculo matemático de comisiones en R
-                if tipo == "SHORT":
+                # Exit checks and mathematical commission calculation in R
+                if trade_type == "SHORT":
                     if vela_15m['Maximo'] >= sl:
-                        precio_salida = sl
-                        if estado_proteccion == "PROTEGIDO": res = "🔵 TP_PARCIAL (+0.5R)"
-                        elif estado_proteccion == "BREAKEVEN": res = "⚪ BREAKEVEN"
+                        exit_price = sl
+                        if protection_state == "PROTECTED": res = "🔵 TP_PARTIAL (+0.5R)"
+                        elif protection_state == "BREAKEVEN": res = "⚪ BREAKEVEN"
                         else: res = "🔴 SL"
                         
-                        # Fórmula: (Costo entrada + Costo salida) / Riesgo
-                        comision_r = ((precio_entrada * comision_porcentaje) + (precio_salida * comision_porcentaje)) / riesgo
-                        resultados.append({'Fecha_Setup': fecha_setup, 'Tipo': tipo, 'Entrada': round(precio_entrada,2), 'Resultado': res, 'Comision_R': round(comision_r, 3)})
-                        fecha_libre = vela_15m['Fecha']
+                        # Formula: (Entry cost + Exit cost) / Risk
+                        commission_r = ((entry_price * commission_percentage) + (exit_price * commission_percentage)) / risk
+                        results.append({'Fecha_Setup': setup_date, 'Tipo': trade_type, 'Entrada': round(entry_price,2), 'Resultado': res, 'Comision_R': round(commission_r, 3)})
+                        free_date = vela_15m['Fecha']
                         break
                         
                     elif vela_15m['Minimo'] <= tp:
-                        precio_salida = tp
-                        comision_r = ((precio_entrada * comision_porcentaje) + (precio_salida * comision_porcentaje)) / riesgo
-                        resultados.append({'Fecha_Setup': fecha_setup, 'Tipo': tipo, 'Entrada': round(precio_entrada,2), 'Resultado': "🟢 TP FULL (+2R)", 'Comision_R': round(comision_r, 3)})
-                        fecha_libre = vela_15m['Fecha']
+                        exit_price = tp
+                        commission_r = ((entry_price * commission_percentage) + (exit_price * commission_percentage)) / risk
+                        results.append({'Fecha_Setup': setup_date, 'Tipo': trade_type, 'Entrada': round(entry_price,2), 'Resultado': "🟢 TP FULL (+2R)", 'Comision_R': round(commission_r, 3)})
+                        free_date = vela_15m['Fecha']
                         break
                         
                 else: # LONG
                     if vela_15m['Minimo'] <= sl:
-                        precio_salida = sl
-                        if estado_proteccion == "PROTEGIDO": res = "🔵 TP_PARCIAL (+0.5R)"
-                        elif estado_proteccion == "BREAKEVEN": res = "⚪ BREAKEVEN"
+                        exit_price = sl
+                        if protection_state == "PROTECTED": res = "🔵 TP_PARTIAL (+0.5R)"
+                        elif protection_state == "BREAKEVEN": res = "⚪ BREAKEVEN"
                         else: res = "🔴 SL"
                         
-                        comision_r = ((precio_entrada * comision_porcentaje) + (precio_salida * comision_porcentaje)) / riesgo
-                        resultados.append({'Fecha_Setup': fecha_setup, 'Tipo': tipo, 'Entrada': round(precio_entrada,2), 'Resultado': res, 'Comision_R': round(comision_r, 3)})
-                        fecha_libre = vela_15m['Fecha']
+                        commission_r = ((entry_price * commission_percentage) + (exit_price * commission_percentage)) / risk
+                        results.append({'Fecha_Setup': setup_date, 'Tipo': trade_type, 'Entrada': round(entry_price,2), 'Resultado': res, 'Comision_R': round(commission_r, 3)})
+                        free_date = vela_15m['Fecha']
                         break
                         
                     elif vela_15m['Maximo'] >= tp:
-                        precio_salida = tp
-                        comision_r = ((precio_entrada * comision_porcentaje) + (precio_salida * comision_porcentaje)) / riesgo
-                        resultados.append({'Fecha_Setup': fecha_setup, 'Tipo': tipo, 'Entrada': round(precio_entrada,2), 'Resultado': "🟢 TP FULL (+2R)", 'Comision_R': round(comision_r, 3)})
-                        fecha_libre = vela_15m['Fecha']
+                        exit_price = tp
+                        commission_r = ((entry_price * commission_percentage) + (exit_price * commission_percentage)) / risk
+                        results.append({'Fecha_Setup': setup_date, 'Tipo': trade_type, 'Entrada': round(entry_price,2), 'Resultado': "🟢 TP FULL (+2R)", 'Comision_R': round(commission_r, 3)})
+                        free_date = vela_15m['Fecha']
                         break
 
-    return pd.DataFrame(resultados)
+    return pd.DataFrame(results)
 
 
-def simular_fvg(
+def simulate_fvg(
     df_1h,
     df_15m,
-    ratio_riesgo_beneficio=2.0,
-    margen_sl=0.01,
-    comision_porcentaje=0.0002,
-    usar_ma=True,
+    risk_reward_ratio=2.0,
+    sl_margin=0.01,
+    commission_percentage=0.0002,
+    use_ma=True,
     ma_window=10,
     max_days_zone=7,
     min_gap_pct=0.002,
 ):
-    """Simulación basada en zonas FVG (Fair Value Gap).
+    """Simulation based on FVG (Fair Value Gap) zones.
 
-    - Genera zonas FVG en 1H.
-    - Busca entrada en 15M cuando el precio vuelve a la zona.
-    - Usa MA para confirmar dirección (opcional).
+    - Generates FVG zones in 1H.
+    - Looks for entry in 15M when price returns to the zone.
+    - Uses MA to confirm direction (optional).
     """
 
     from indicators.fvg import detectar_fvg_zonas
 
-    resultados = []
-    fecha_libre = pd.Timestamp('1970-01-01')
+    results = []
+    free_date = pd.Timestamp('1970-01-01')
 
-    zonas = detectar_fvg_zonas(df_1h, min_gap_pct=min_gap_pct)
-    if not zonas:
-        return pd.DataFrame(resultados)
+    zones = detectar_fvg_zonas(df_1h, min_gap_pct=min_gap_pct)
+    if not zones:
+        return pd.DataFrame(results)
 
-    if usar_ma:
+    if use_ma:
         df_15m['MA_15m'] = df_15m['Cierre'].rolling(window=ma_window).mean()
 
-    for zona in zonas:
-        if zona['fecha'] <= fecha_libre:
+    for zona in zones:
+        if zona['fecha'] <= free_date:
             continue
 
-        tipo = zona['tipo']
-        fecha_inicio = zona['fecha']
-        zona_low = zona['low']
-        zona_high = zona['high']
-        rango_zona = zona_high - zona_low
+        trade_type = zona['tipo']
+        start_date = zona['fecha']
+        zone_low = zona['low']
+        zone_high = zona['high']
+        zone_range = zone_high - zone_low
 
-        # Stop loss justo fuera de la zona, con margen
-        if tipo == 'LONG':
-            sl_base = zona_low
-            sl = sl_base - (rango_zona * margen_sl)
+        # Stop loss just outside the zone, with margin
+        if trade_type == 'LONG':
+            sl_base = zone_low
+            sl = sl_base - (zone_range * sl_margin)
         else:
-            sl_base = zona_high
-            sl = sl_base + (rango_zona * margen_sl)
+            sl_base = zone_high
+            sl = sl_base + (zone_range * sl_margin)
 
-        precio_entrada = sl = tp = riesgo = 0
-        en_operacion = False
+        entry_price = sl = tp = risk = 0
+        in_operation = False
 
-        velas_15m_futuro = df_15m[df_15m['Fecha'] > fecha_inicio]
+        velas_15m_futuro = df_15m[df_15m['Fecha'] > start_date]
         for vela_15m in velas_15m_futuro.itertuples(index=False):
-            if vela_15m.Fecha <= fecha_inicio:
+            if vela_15m.Fecha <= start_date:
                 continue
 
-            # Si la zona ha caducado, abandono
-            if (vela_15m.Fecha - fecha_inicio).total_seconds() > max_days_zone * 86400:
+            # If the zone has expired, abandon
+            if (vela_15m.Fecha - start_date).total_seconds() > max_days_zone * 86400:
                 break
 
-            if not en_operacion:
-                # Buscamos que el cierre del 15m quede dentro de la zona (entrada en la FVG)
-                entra_en_zona = zona_low <= vela_15m.Cierre <= zona_high
-                if tipo == 'LONG':
-                    confirmacion = vela_15m.Cierre > getattr(vela_15m, 'MA_15m', float('inf')) if usar_ma else True
+            if not in_operation:
+                # We look for the 15m close to be within the zone (entry in the FVG)
+                enters_zone = zone_low <= vela_15m.Cierre <= zone_high
+                if trade_type == 'LONG':
+                    confirmation = vela_15m.Cierre > getattr(vela_15m, 'MA_15m', float('inf')) if use_ma else True
                 else:
-                    confirmacion = vela_15m.Cierre < getattr(vela_15m, 'MA_15m', float('-inf')) if usar_ma else True
+                    confirmation = vela_15m.Cierre < getattr(vela_15m, 'MA_15m', float('-inf')) if use_ma else True
 
-                if entra_en_zona and confirmacion:
-                    precio_entrada = vela_15m.Cierre
+                if enters_zone and confirmation:
+                    entry_price = vela_15m.Cierre
 
-                    # Recalculate SL usando la zona y el precio de entrada para asegurar que el riesgo sea positivo
-                    margen_abs = max(rango_zona * margen_sl, abs(precio_entrada) * 0.0005)
-                    if tipo == 'LONG':
-                        sl = min(zona_low, precio_entrada) - margen_abs
+                    # Recalculate SL using the zone and entry price to ensure positive risk
+                    margin_abs = max(zone_range * sl_margin, abs(entry_price) * 0.0005)
+                    if trade_type == 'LONG':
+                        sl = min(zone_low, entry_price) - margin_abs
                     else:
-                        sl = max(zona_high, precio_entrada) + margen_abs
+                        sl = max(zone_high, entry_price) + margin_abs
 
-                    riesgo = abs(precio_entrada - sl)
-                    if riesgo <= 0:
+                    risk = abs(entry_price - sl)
+                    if risk <= 0:
                         break
 
                     tp = (
-                        precio_entrada + (riesgo * ratio_riesgo_beneficio)
-                        if tipo == 'LONG'
-                        else precio_entrada - (riesgo * ratio_riesgo_beneficio)
+                        entry_price + (risk * risk_reward_ratio)
+                        if trade_type == 'LONG'
+                        else entry_price - (risk * risk_reward_ratio)
                     )
-                    en_operacion = True
-                    estado_proteccion = 'NADA'
+                    in_operation = True
+                    protection_state = 'NOTHING'
                     continue
 
-            # Si estamos en operación, gestionamos salida
-            if en_operacion:
-                if tipo == 'LONG':
-                    # Trailing y breakeven rápido
-                    distancia_a_favor = vela_15m.Maximo - precio_entrada
-                    if distancia_a_favor >= (riesgo * 1.5) and estado_proteccion != 'PROTEGIDO':
-                        sl = precio_entrada + (riesgo * 0.5)
-                        estado_proteccion = 'PROTEGIDO'
-                    elif distancia_a_favor >= riesgo and estado_proteccion == 'NADA':
-                        sl = precio_entrada
-                        estado_proteccion = 'BREAKEVEN'
+            # If we are in operation, manage exit
+            if in_operation:
+                if trade_type == 'LONG':
+                    # Trailing and fast breakeven
+                    distance_in_favor = vela_15m.Maximo - entry_price
+                    if distance_in_favor >= (risk * 1.5) and protection_state != 'PROTECTED':
+                        sl = entry_price + (risk * 0.5)
+                        protection_state = 'PROTECTED'
+                    elif distance_in_favor >= risk and protection_state == 'NOTHING':
+                        sl = entry_price
+                        protection_state = 'BREAKEVEN'
 
                     if vela_15m.Minimo <= sl:
-                        precio_salida = sl
-                        if estado_proteccion == 'PROTEGIDO':
-                            res = '🔵 TP_PARCIAL (+0.5R)'
-                        elif estado_proteccion == 'BREAKEVEN':
+                        exit_price = sl
+                        if protection_state == 'PROTECTED':
+                            res = '🔵 TP_PARTIAL (+0.5R)'
+                        elif protection_state == 'BREAKEVEN':
                             res = '⚪ BREAKEVEN'
                         else:
                             res = '🔴 SL'
 
-                        comision_r = ((precio_entrada * comision_porcentaje) + (precio_salida * comision_porcentaje)) / riesgo
-                        resultados.append({
-                            'Fecha_Setup': fecha_inicio,
-                            'Tipo': tipo,
-                            'Entrada': round(precio_entrada, 2),
+                        commission_r = ((entry_price * commission_percentage) + (exit_price * commission_percentage)) / risk
+                        results.append({
+                            'Fecha_Setup': start_date,
+                            'Tipo': trade_type,
+                            'Entrada': round(entry_price, 2),
                             'Resultado': res,
-                            'Comision_R': round(comision_r, 3),
+                            'Comision_R': round(commission_r, 3),
                         })
-                        fecha_libre = vela_15m.Fecha
+                        free_date = vela_15m.Fecha
                         break
 
                     if vela_15m.Maximo >= tp:
-                        precio_salida = tp
-                        comision_r = ((precio_entrada * comision_porcentaje) + (precio_salida * comision_porcentaje)) / riesgo
-                        resultados.append({
-                            'Fecha_Setup': fecha_inicio,
-                            'Tipo': tipo,
-                            'Entrada': round(precio_entrada, 2),
+                        exit_price = tp
+                        commission_r = ((entry_price * commission_percentage) + (exit_price * commission_percentage)) / risk
+                        results.append({
+                            'Fecha_Setup': start_date,
+                            'Tipo': trade_type,
+                            'Entrada': round(entry_price, 2),
                             'Resultado': '🟢 TP FULL (+2R)',
-                            'Comision_R': round(comision_r, 3),
+                            'Comision_R': round(commission_r, 3),
                         })
-                        fecha_libre = vela_15m.Fecha
+                        free_date = vela_15m.Fecha
                         break
 
                 else:  # SHORT
-                    distancia_a_favor = precio_entrada - vela_15m.Minimo
-                    if distancia_a_favor >= (riesgo * 1.5) and estado_proteccion != 'PROTEGIDO':
-                        sl = precio_entrada - (riesgo * 0.5)
-                        estado_proteccion = 'PROTEGIDO'
-                    elif distancia_a_favor >= riesgo and estado_proteccion == 'NADA':
-                        sl = precio_entrada
-                        estado_proteccion = 'BREAKEVEN'
+                    distance_in_favor = entry_price - vela_15m.Minimo
+                    if distance_in_favor >= (risk * 1.5) and protection_state != 'PROTECTED':
+                        sl = entry_price - (risk * 0.5)
+                        protection_state = 'PROTECTED'
+                    elif distance_in_favor >= risk and protection_state == 'NOTHING':
+                        sl = entry_price
+                        protection_state = 'BREAKEVEN'
 
                     if vela_15m.Maximo >= sl:
-                        precio_salida = sl
-                        if estado_proteccion == 'PROTEGIDO':
-                            res = '🔵 TP_PARCIAL (+0.5R)'
-                        elif estado_proteccion == 'BREAKEVEN':
+                        exit_price = sl
+                        if protection_state == 'PROTECTED':
+                            res = '🔵 TP_PARTIAL (+0.5R)'
+                        elif protection_state == 'BREAKEVEN':
                             res = '⚪ BREAKEVEN'
                         else:
                             res = '🔴 SL'
 
-                        comision_r = ((precio_entrada * comision_porcentaje) + (precio_salida * comision_porcentaje)) / riesgo
-                        resultados.append({
-                            'Fecha_Setup': fecha_inicio,
-                            'Tipo': tipo,
-                            'Entrada': round(precio_entrada, 2),
+                        commission_r = ((entry_price * commission_percentage) + (exit_price * commission_percentage)) / risk
+                        results.append({
+                            'Fecha_Setup': start_date,
+                            'Tipo': trade_type,
+                            'Entrada': round(entry_price, 2),
                             'Resultado': res,
-                            'Comision_R': round(comision_r, 3),
+                            'Comision_R': round(commission_r, 3),
                         })
-                        fecha_libre = vela_15m.Fecha
+                        free_date = vela_15m.Fecha
                         break
 
                     if vela_15m.Minimo <= tp:
-                        precio_salida = tp
-                        comision_r = ((precio_entrada * comision_porcentaje) + (precio_salida * comision_porcentaje)) / riesgo
-                        resultados.append({
-                            'Fecha_Setup': fecha_inicio,
-                            'Tipo': tipo,
-                            'Entrada': round(precio_entrada, 2),
+                        exit_price = tp
+                        commission_r = ((entry_price * commission_percentage) + (exit_price * commission_percentage)) / risk
+                        results.append({
+                            'Fecha_Setup': start_date,
+                            'Tipo': trade_type,
+                            'Entrada': round(entry_price, 2),
                             'Resultado': '🟢 TP FULL (+2R)',
-                            'Comision_R': round(comision_r, 3),
+                            'Comision_R': round(commission_r, 3),
                         })
-                        fecha_libre = vela_15m.Fecha
+                        free_date = vela_15m.Fecha
                         break
 
-    return pd.DataFrame(resultados)
+    return pd.DataFrame(results)
